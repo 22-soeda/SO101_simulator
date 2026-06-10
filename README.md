@@ -3,9 +3,11 @@
 matplotlibの3Dビューア上でSO-101アームの姿勢を確認できるシミュレーターです。
 2種類の操作方法があります。
 
-- `simulator.py`     : ターミナルに各軸の角度[deg]を入力して動かす版
-- `simulator_ik.py`  : スライダーで手先位置・姿勢を指定し、逆運動学(IK)で
+- `simulator.py`          : ターミナルに各軸の角度[deg]を入力して動かす版
+- `simulator_ik.py`       : スライダーで手先位置・姿勢を指定し、逆運動学(IK)で
   動かす版
+- `simulator_ik_sync.py`  : `simulator_ik.py`に加えて、実機のFEETECHサーボへ
+  関節角度をリアルタイムに送信する版
 
 ## セットアップ
 
@@ -67,6 +69,54 @@ python simulator_ik.py
 `shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex` の4関節角度が
 自動計算されます。目標が可動範囲外などで到達できない場合は、最も近い
 姿勢になります。
+
+## 実行 (実機サーボ同期版)
+
+`simulator_ik.py`と同じ操作に加えて、接続されているFEETECHサーボへ
+関節角度をリアルタイムに送信します。
+
+### 接続設定
+
+`servo_config.py` でポート・ボーレート・各関節とサーボIDの対応を設定します
+(デフォルト: `COM12`, 1Mbps, `shoulder_pan`=ID1 〜 `gripper`=ID6)。
+
+### キャリブレーション
+
+実機の角度とシミュレーターの論理角度を合わせるため、初回は
+キャリブレーションを行います。
+
+1. 各サーボを、シミュレーターの基準姿勢(全軸0度)に対応する実機の
+   姿勢に手で動かしておく。
+2. 以下を実行する。
+
+   ```powershell
+   .\venv\Scripts\Activate.ps1
+   python calibrate_servos.py
+   ```
+
+3. 接続されているサーボごとに、回転方向(`1`または`-1`)と現在の論理角度
+   (基準姿勢なら`0`)を入力する。`Enter`のみでデフォルト値を使用できる。
+
+設定値は `servo_calibration.json` (gitignore対象、実機ごとに異なる) に
+保存され、各関節の以下の値が含まれる:
+
+- `home_position` : 論理角度0度に対応するサーボ位置
+- `direction`     : サーボ位置の増加方向と論理角度の+方向の関係 (`1`/`-1`)
+- `position_min` / `position_max` : `so101_kinematics.py`の可動範囲
+  (`JOINT_LIMITS_DEG`)から計算される、サーボに送信してよい位置の範囲
+  (ソフトリミット)
+
+### 実行
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python simulator_ik_sync.py
+```
+
+起動時に接続されているサーボIDが表示される。`servo_config.py`の
+`JOINT_TO_SERVO_ID`に登録されているIDのうち、実際に接続されている
+関節のみ実機に角度が送信される(未接続の関節は無視されシミュレーターの
+表示のみ更新される)。
 
 ## 補足
 
