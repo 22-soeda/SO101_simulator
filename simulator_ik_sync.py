@@ -4,6 +4,10 @@ simulator_ik.py のスライダー操作で計算された関節角度を、接�
 FEETECHサーボへリアルタイムに送信する。未接続のサーボIDは無視されるため、
 一部の関節のみ接続している場合でもそのまま使える。
 
+IK計算とサーボへのシリアル通信はバックグラウンドスレッド(ArmWorker)で
+行われるため、シリアル通信が多少遅延してもGUI操作(3Dビューのドラッグ
+回転など)はブロックされない。
+
 事前に calibrate_servos.py でキャリブレーションしておくこと。
 
 使い方:
@@ -13,22 +17,7 @@ FEETECHサーボへリアルタイムに送信する。未接続のサーボID�
 import matplotlib.pyplot as plt
 
 from simulator_ik import IKSimulator
-from so101_ik import IK_JOINT_NAMES
 from servo_sync import ServoSync
-
-
-class SyncIKSimulator(IKSimulator):
-    def __init__(self, servo_sync):
-        self.servo_sync = servo_sync
-        super().__init__()
-
-    def redraw(self):
-        super().redraw()
-
-        angles_deg = dict(zip(IK_JOINT_NAMES, self.q4))
-        angles_deg["wrist_roll"] = self.wrist_roll
-        angles_deg["gripper"] = self.gripper
-        self.servo_sync.send_angles(angles_deg)
 
 
 def main():
@@ -45,7 +34,7 @@ def main():
     print("スライダーを動かすと、接続されているサーボにも角度が送信されます。")
     print("ウィンドウを閉じると終了します。")
 
-    SyncIKSimulator(sync)
+    IKSimulator(servo_sync=sync)
     try:
         plt.show()
     finally:

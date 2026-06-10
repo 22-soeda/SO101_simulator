@@ -23,7 +23,10 @@ from so101_kinematics import (
     JOINT_LIMITS_DEG,
     clamp_angles,
 )
-from so101_view import draw_arm
+from so101_view import ArmArtists
+
+# 入力された角度を反映する周期 [ms]
+REDRAW_INTERVAL_MS = 50
 
 
 class Simulator:
@@ -35,6 +38,13 @@ class Simulator:
 
         self.fig = plt.figure(figsize=(7, 7))
         self.ax = self.fig.add_subplot(111, projection="3d")
+        self.artists = ArmArtists(self.ax)
+
+        # ターミナル入力(別スレッド)による角度変更を、一定周期でのみ
+        # 描画オブジェクトに反映する。これにより、3Dビューのドラッグ
+        # 回転中に毎回 ax.cla() が走って操作が引っかかることを防ぐ。
+        self.timer = self.fig.canvas.new_timer(interval=REDRAW_INTERVAL_MS)
+        self.timer.add_callback(self._on_timer)
 
     def set_angles(self, angles_deg):
         clamped = clamp_angles(angles_deg)
@@ -47,17 +57,24 @@ class Simulator:
         with self.lock:
             angles = list(self.angles)
 
-        draw_arm(self.ax, angles)
+        self.artists.update(angles)
         self.fig.canvas.draw_idle()
 
-    def update_loop(self):
-        while self.running:
-            with self.lock:
-                dirty = self.dirty
-                self.dirty = False
-            if dirty:
-                self.draw()
-            plt.pause(0.05)
+    def _on_timer(self):
+        if not self.running:
+            self.timer.stop()
+            plt.close(self.fig)
+            return
+
+        with self.lock:
+            dirty = self.dirty
+            self.dirty = False
+        if dirty:
+            self.draw()
+
+    def start(self):
+        self.draw()
+        self.timer.start()
 
 
 def print_help():
@@ -118,13 +135,12 @@ def input_loop(sim: Simulator):
 
 def main():
     sim = Simulator()
-    sim.draw()
+    sim.start()
 
     thread = threading.Thread(target=input_loop, args=(sim,), daemon=True)
     thread.start()
 
-    plt.show(block=False)
-    sim.update_loop()
+    plt.show()
 
 
 if __name__ == "__main__":
