@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+
+# 実機ごとのキャリブレーション値 (calibrate_servos.pyで生成)
+servo_calibration.json
