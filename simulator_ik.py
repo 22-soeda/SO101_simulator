@@ -14,6 +14,8 @@ GUI操作がブロックされない。
     python simulator_ik.py
 """
 
+import time
+
 import numpy as np
 import pyvista as pv
 
@@ -28,17 +30,15 @@ Y_RANGE = (-PLOT_RANGE_XY, PLOT_RANGE_XY)
 Z_RANGE = (PLOT_Z_MIN, PLOT_Z_MAX)
 PITCH_RANGE_DEG = (-90.0, 90.0)
 
-# 描画更新の周期 [ms]
-REDRAW_INTERVAL_MS = 50
-
-# タイマーの最大実行回数 (REDRAW_INTERVAL_MSとの積が実用上の最大実行時間)
-MAX_TIMER_STEPS = 10**8
+# 描画更新の周期 [秒]
+REDRAW_INTERVAL = 0.05
 
 # スライダーの並べ方 (画面右側に縦に並べる)
 SLIDER_TOP = 0.95
-SLIDER_SPACING = 0.10
+SLIDER_SPACING = 0.13
 SLIDER_POINT_A_X = 0.70
 SLIDER_POINT_B_X = 0.98
+SLIDER_TITLE_HEIGHT = 0.018
 
 
 class IKSimulator:
@@ -72,6 +72,8 @@ class IKSimulator:
             pointb=(SLIDER_POINT_B_X, y),
             interaction_event="always",
             style="modern",
+            title_height=SLIDER_TITLE_HEIGHT,
+            fmt="%.2f",
         )
 
     def _build_sliders(self):
@@ -104,9 +106,6 @@ class IKSimulator:
         ])
         self.worker.set_target(target, self.values["wrist_roll"], self.values["gripper"])
 
-    def _on_timer(self, _step):
-        self._redraw_from_state()
-
     def _redraw_from_state(self):
         q4, wrist_roll, gripper, tcp_pose = self.worker.get_state()
         angles = list(q4) + [wrist_roll, gripper]
@@ -122,10 +121,16 @@ class IKSimulator:
         )
         self.scene.update(angles, title=title)
 
-    def start(self):
-        self.pl.add_timer_event(
-            max_steps=MAX_TIMER_STEPS, duration=REDRAW_INTERVAL_MS, callback=self._on_timer
-        )
+    def run(self):
+        """ウィンドウを開き、閉じられるまで一定周期で再描画し続ける。"""
+        self.pl.show(auto_close=False, interactive_update=True)
+        while self.pl.iren is not None:
+            self._redraw_from_state()
+            try:
+                self.pl.update()
+            except Exception:
+                break
+            time.sleep(REDRAW_INTERVAL)
 
 
 def main():
@@ -135,9 +140,10 @@ def main():
     print("ウィンドウを閉じると終了します。")
 
     sim = IKSimulator()
-    sim.start()
-    sim.pl.show()
-    sim.worker.stop()
+    try:
+        sim.run()
+    finally:
+        sim.worker.stop()
 
 
 if __name__ == "__main__":

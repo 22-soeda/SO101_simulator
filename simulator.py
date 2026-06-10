@@ -15,6 +15,7 @@
 """
 
 import threading
+import time
 
 import pyvista as pv
 
@@ -25,11 +26,8 @@ from so101_kinematics import (
 )
 from so101_view import ArmScene
 
-# 入力された角度を反映する周期 [ms]
-REDRAW_INTERVAL_MS = 50
-
-# タイマーの最大実行回数 (REDRAW_INTERVAL_MSとの積が実用上の最大実行時間)
-MAX_TIMER_STEPS = 10**8
+# 入力された角度を反映する周期 [秒]
+REDRAW_INTERVAL = 0.05
 
 
 class Simulator:
@@ -55,22 +53,24 @@ class Simulator:
 
         self.scene.update(angles)
 
-    def _on_timer(self, _step):
-        if not self.running:
-            self.pl.close()
-            return
-
-        with self.lock:
-            dirty = self.dirty
-            self.dirty = False
-        if dirty:
-            self.draw()
-
-    def start(self):
+    def run(self):
+        """ウィンドウを開き、閉じられるまで一定周期で再描画し続ける。"""
         self.draw()
-        self.pl.add_timer_event(
-            max_steps=MAX_TIMER_STEPS, duration=REDRAW_INTERVAL_MS, callback=self._on_timer
-        )
+        self.pl.show(auto_close=False, interactive_update=True)
+        while self.running and self.pl.iren is not None:
+            with self.lock:
+                dirty = self.dirty
+                self.dirty = False
+            if dirty:
+                self.draw()
+            try:
+                self.pl.update()
+            except Exception:
+                break
+            time.sleep(REDRAW_INTERVAL)
+
+        if self.pl.iren is not None:
+            self.pl.close()
 
 
 def print_help():
@@ -131,12 +131,11 @@ def input_loop(sim: Simulator):
 
 def main():
     sim = Simulator()
-    sim.start()
 
     thread = threading.Thread(target=input_loop, args=(sim,), daemon=True)
     thread.start()
 
-    sim.pl.show()
+    sim.run()
 
 
 if __name__ == "__main__":

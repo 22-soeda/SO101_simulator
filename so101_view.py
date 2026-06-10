@@ -85,6 +85,9 @@ class ArmScene:
             (0.0, 0.0, 1.0),
         ]
 
+        # CAD風のターンテーブル操作 (Z軸を常に上に保ったまま回転する)
+        self.pl.enable_terrain_style(mouse_wheel_zooms=True)
+
     def update(self, angles_deg, title=None):
         """6軸の角度[deg]に基づき、既存の描画オブジェクトのデータを更新する。"""
         points, end_effector_T, fingers = forward_kinematics(angles_deg)

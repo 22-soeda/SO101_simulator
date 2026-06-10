@@ -33,9 +33,8 @@ def main():
     print("ウィンドウを閉じると終了します。")
 
     sim = IKSimulator(servo_sync=sync)
-    sim.start()
     try:
-        sim.pl.show()
+        sim.run()
     finally:
         sim.worker.stop()
         sync.close()
