@@ -1,7 +1,11 @@
-# SO-101 3Dシミュレーター (第1段階: 関節角度入力版)
+# SO-101 3Dシミュレーター
 
-ターミナルに各軸の角度[deg]を入力すると、matplotlibの3Dビューア上で
-SO-101アームがその姿勢に動きます。
+matplotlibの3Dビューア上でSO-101アームの姿勢を確認できるシミュレーターです。
+2種類の操作方法があります。
+
+- `simulator.py`     : ターミナルに各軸の角度[deg]を入力して動かす版
+- `simulator_ik.py`  : スライダーで手先位置・姿勢を指定し、逆運動学(IK)で
+  動かす版
 
 ## セットアップ
 
@@ -15,7 +19,7 @@ pip install -r requirements.txt
 
 (既に `venv` フォルダが用意されている場合は `python -m venv venv` は不要です)
 
-## 実行
+## 実行 (関節角度入力版)
 
 ```powershell
 .\venv\Scripts\Activate.ps1
@@ -45,6 +49,25 @@ python simulator.py
 - `reset` : 全軸を0度に戻す
 - `quit`  : 終了
 
+## 実行 (IK・スライダー操作版)
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python simulator_ik.py
+```
+
+ウィンドウ下部の6本のスライダーを動かすと、アームがその通りに動きます。
+
+- `X [m]` / `Y [m]` / `Z [m]` : グリッパー先端(TCP)の目標位置
+- `Pitch [deg]`                : グリッパー先端が向く方向の、水平面に対する角度
+- `wrist_roll [deg]`           : 手首の回転 (IKの対象外、直接指定)
+- `gripper [deg]`               : グリッパーの開閉 (IKの対象外、直接指定)
+
+`X`/`Y`/`Z`/`Pitch` を変更すると、数値IK(ヤコビアン+反復法)で
+`shoulder_pan`, `shoulder_lift`, `elbow_flex`, `wrist_flex` の4関節角度が
+自動計算されます。目標が可動範囲外などで到達できない場合は、最も近い
+姿勢になります。
+
 ## 補足
 
 - `so101_kinematics.py` の各関節のオフセット(`JOINT_PARAMS`の`xyz`/`rpy`)と
@@ -53,5 +76,6 @@ python simulator.py
   の `Simulation/SO101/so101_new_calib.urdf` から取得した値をそのまま
   使用しており、実機の3Dオフセットを忠実に再現しています。
 - グリッパー指の見た目(`FINGER_LENGTH`)のみ概算値です。
-- 次のステップとして、エンド位置・グリッパー位置を指定して逆運動学(IK)で
-  各軸角度を自動計算する機能を追加する予定です。
+- IKは `so101_ik.py` でヤコビアンの数値微分+疑似逆行列によるGauss-Newton法で
+  解いています。特異姿勢付近では振動することがあるため、反復中で最も
+  誤差が小さかった角度を採用しています。
