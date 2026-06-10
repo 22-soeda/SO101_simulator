@@ -1,4 +1,4 @@
-"""SO-101アーム 3Dシミュレーター (逆運動学・スライダー操作版)。
+"""SO-101アーム 3Dシミュレーター (逆運動学・スライダー操作版, PyVista)。
 
 スライダーで手先位置(X, Y, Z)と手先のピッチ角を指定すると、数値IK
 (ヤコビアン+反復法)でshoulder_pan, shoulder_lift, elbow_flex, wrist_flex
@@ -7,20 +7,19 @@
 
 IK計算はバックグラウンドスレッド(ArmWorker)で行い、描画は一定周期の
 タイマーで更新する。スライダーのコールバックは目標値の更新のみを行う
-軽量な処理のため、3Dビューのドラッグ回転などのGUI操作がブロックされない。
+軽量な処理のため、3Dビューのドラッグ回転・スクロールズームなどの
+GUI操作がブロックされない。
 
 使い方:
     python simulator_ik.py
 """
 
-import matplotlib.pyplot as plt
-from matplotlib.widgets import Slider
-
 import numpy as np
+import pyvista as pv
 
 from so101_kinematics import JOINT_LIMITS_DEG
 from so101_ik import IK_JOINT_NAMES, end_effector_pose
-from so101_view import ArmArtists, PLOT_RANGE_XY, PLOT_Z_MIN, PLOT_Z_MAX
+from so101_view import ArmScene, PLOT_RANGE_XY, PLOT_Z_MIN, PLOT_Z_MAX
 from arm_worker import ArmWorker
 
 # スライダーの範囲
@@ -31,6 +30,15 @@ PITCH_RANGE_DEG = (-90.0, 90.0)
 
 # 描画更新の周期 [ms]
 REDRAW_INTERVAL_MS = 50
+
+# タイマーの最大実行回数 (REDRAW_INTERVAL_MSとの積が実用上の最大実行時間)
+MAX_TIMER_STEPS = 10**8
+
+# スライダーの並べ方 (画面右側に縦に並べる)
+SLIDER_TOP = 0.95
+SLIDER_SPACING = 0.10
+SLIDER_POINT_A_X = 0.70
+SLIDER_POINT_B_X = 0.98
 
 
 class IKSimulator:
@@ -46,55 +54,57 @@ class IKSimulator:
 
         self.worker = ArmWorker(q4_init, self.wrist_roll_init, self.gripper_init, servo_sync=servo_sync)
 
-        self.fig = plt.figure(figsize=(8, 9))
-        self.ax = self.fig.add_subplot(111, projection="3d")
-        self.fig.subplots_adjust(bottom=0.40)
+        self.pl = pv.Plotter(title="SO-101 IK Simulator")
+        self.scene = ArmScene(self.pl)
 
-        self.artists = ArmArtists(self.ax)
-
-        self.sliders = {}
         self._build_sliders()
 
         self._redraw_from_state()
 
-        self.timer = self.fig.canvas.new_timer(interval=REDRAW_INTERVAL_MS)
-        self.timer.add_callback(self._on_timer)
-        self.timer.start()
-
-        self.fig.canvas.mpl_connect("close_event", self._on_close)
-
-    def _add_slider(self, index, label, vmin, vmax, vinit):
-        ax_slider = self.fig.add_axes([0.25, 0.03 + 0.04 * index, 0.6, 0.03])
-        slider = Slider(ax_slider, label, vmin, vmax, valinit=vinit)
-        slider.on_changed(self._on_slider_changed)
-        self.sliders[label] = slider
+    def _add_slider(self, index, key, title, vmin, vmax, vinit):
+        y = SLIDER_TOP - index * SLIDER_SPACING
+        self.pl.add_slider_widget(
+            callback=lambda value, k=key: self._on_slider_changed(k, value),
+            rng=(vmin, vmax),
+            value=vinit,
+            title=title,
+            pointa=(SLIDER_POINT_A_X, y),
+            pointb=(SLIDER_POINT_B_X, y),
+            interaction_event="always",
+            style="modern",
+        )
 
     def _build_sliders(self):
         x, y, z, pitch_deg = self.init_xyz_pitch
         wr_lo, wr_hi = JOINT_LIMITS_DEG["wrist_roll"]
         gr_lo, gr_hi = JOINT_LIMITS_DEG["gripper"]
 
-        # 下から順に並ぶので、上に表示したいものほどindexを大きくする
-        self._add_slider(5, "X [m]", *X_RANGE, x)
-        self._add_slider(4, "Y [m]", *Y_RANGE, y)
-        self._add_slider(3, "Z [m]", *Z_RANGE, z)
-        self._add_slider(2, "Pitch [deg]", *PITCH_RANGE_DEG, pitch_deg)
-        self._add_slider(1, "wrist_roll [deg]", wr_lo, wr_hi, self.wrist_roll_init)
-        self._add_slider(0, "gripper [deg]", gr_lo, gr_hi, self.gripper_init)
+        # add_slider_widgetは作成時にもコールバックを呼ぶため、最初の
+        # スライダー作成時点で全キーの初期値を参照できるようにしておく。
+        self.values = {
+            "x": x, "y": y, "z": z, "pitch": pitch_deg,
+            "wrist_roll": self.wrist_roll_init, "gripper": self.gripper_init,
+        }
 
-    def _on_slider_changed(self, _value):
+        self._add_slider(0, "x", "X [m]", *X_RANGE, x)
+        self._add_slider(1, "y", "Y [m]", *Y_RANGE, y)
+        self._add_slider(2, "z", "Z [m]", *Z_RANGE, z)
+        self._add_slider(3, "pitch", "Pitch [deg]", *PITCH_RANGE_DEG, pitch_deg)
+        self._add_slider(4, "wrist_roll", "wrist_roll [deg]", wr_lo, wr_hi, self.wrist_roll_init)
+        self._add_slider(5, "gripper", "gripper [deg]", gr_lo, gr_hi, self.gripper_init)
+
+    def _on_slider_changed(self, key, value):
         """スライダー変更時のコールバック。重い処理は行わずワーカーに委譲する。"""
+        self.values[key] = value
         target = np.array([
-            self.sliders["X [m]"].val,
-            self.sliders["Y [m]"].val,
-            self.sliders["Z [m]"].val,
-            np.radians(self.sliders["Pitch [deg]"].val),
+            self.values["x"],
+            self.values["y"],
+            self.values["z"],
+            np.radians(self.values["pitch"]),
         ])
-        wrist_roll = self.sliders["wrist_roll [deg]"].val
-        gripper = self.sliders["gripper [deg]"].val
-        self.worker.set_target(target, wrist_roll, gripper)
+        self.worker.set_target(target, self.values["wrist_roll"], self.values["gripper"])
 
-    def _on_timer(self):
+    def _on_timer(self, _step):
         self._redraw_from_state()
 
     def _redraw_from_state(self):
@@ -110,12 +120,12 @@ class IKSimulator:
             f"TCP: x={x:.3f} y={y:.3f} z={z:.3f} pitch={np.degrees(pitch_rad):.1f}deg\n"
             f"{joint_str}"
         )
-        self.artists.update(angles, title=title)
-        self.fig.canvas.draw_idle()
+        self.scene.update(angles, title=title)
 
-    def _on_close(self, _event):
-        self.timer.stop()
-        self.worker.stop()
+    def start(self):
+        self.pl.add_timer_event(
+            max_steps=MAX_TIMER_STEPS, duration=REDRAW_INTERVAL_MS, callback=self._on_timer
+        )
 
 
 def main():
@@ -124,8 +134,10 @@ def main():
     print("wrist_roll(手首回転)とgripper(開閉)は直接スライダーで操作します。")
     print("ウィンドウを閉じると終了します。")
 
-    IKSimulator()
-    plt.show()
+    sim = IKSimulator()
+    sim.start()
+    sim.pl.show()
+    sim.worker.stop()
 
 
 if __name__ == "__main__":

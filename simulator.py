@@ -16,17 +16,20 @@
 
 import threading
 
-import matplotlib.pyplot as plt
+import pyvista as pv
 
 from so101_kinematics import (
     JOINT_NAMES,
     JOINT_LIMITS_DEG,
     clamp_angles,
 )
-from so101_view import ArmArtists
+from so101_view import ArmScene
 
 # 入力された角度を反映する周期 [ms]
 REDRAW_INTERVAL_MS = 50
+
+# タイマーの最大実行回数 (REDRAW_INTERVAL_MSとの積が実用上の最大実行時間)
+MAX_TIMER_STEPS = 10**8
 
 
 class Simulator:
@@ -36,15 +39,8 @@ class Simulator:
         self.dirty = True
         self.running = True
 
-        self.fig = plt.figure(figsize=(7, 7))
-        self.ax = self.fig.add_subplot(111, projection="3d")
-        self.artists = ArmArtists(self.ax)
-
-        # ターミナル入力(別スレッド)による角度変更を、一定周期でのみ
-        # 描画オブジェクトに反映する。これにより、3Dビューのドラッグ
-        # 回転中に毎回 ax.cla() が走って操作が引っかかることを防ぐ。
-        self.timer = self.fig.canvas.new_timer(interval=REDRAW_INTERVAL_MS)
-        self.timer.add_callback(self._on_timer)
+        self.pl = pv.Plotter(title="SO-101 Simulator")
+        self.scene = ArmScene(self.pl)
 
     def set_angles(self, angles_deg):
         clamped = clamp_angles(angles_deg)
@@ -57,13 +53,11 @@ class Simulator:
         with self.lock:
             angles = list(self.angles)
 
-        self.artists.update(angles)
-        self.fig.canvas.draw_idle()
+        self.scene.update(angles)
 
-    def _on_timer(self):
+    def _on_timer(self, _step):
         if not self.running:
-            self.timer.stop()
-            plt.close(self.fig)
+            self.pl.close()
             return
 
         with self.lock:
@@ -74,7 +68,9 @@ class Simulator:
 
     def start(self):
         self.draw()
-        self.timer.start()
+        self.pl.add_timer_event(
+            max_steps=MAX_TIMER_STEPS, duration=REDRAW_INTERVAL_MS, callback=self._on_timer
+        )
 
 
 def print_help():
@@ -140,7 +136,7 @@ def main():
     thread = threading.Thread(target=input_loop, args=(sim,), daemon=True)
     thread.start()
 
-    plt.show()
+    sim.pl.show()
 
 
 if __name__ == "__main__":

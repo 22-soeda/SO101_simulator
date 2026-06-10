@@ -14,8 +14,6 @@ IK計算とサーボへのシリアル通信はバックグラウンドスレッ
     python simulator_ik_sync.py
 """
 
-import matplotlib.pyplot as plt
-
 from simulator_ik import IKSimulator
 from servo_sync import ServoSync
 
@@ -34,10 +32,12 @@ def main():
     print("スライダーを動かすと、接続されているサーボにも角度が送信されます。")
     print("ウィンドウを閉じると終了します。")
 
-    IKSimulator(servo_sync=sync)
+    sim = IKSimulator(servo_sync=sync)
+    sim.start()
     try:
-        plt.show()
+        sim.pl.show()
     finally:
+        sim.worker.stop()
         sync.close()
 
 
