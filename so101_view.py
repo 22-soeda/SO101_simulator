@@ -9,8 +9,14 @@ PyVistaはVTKベースの3Dビューアで、マウスドラッグでの視点�
 
 import numpy as np
 import pyvista as pv
+from vtkmodules.vtkCommonCore import vtkObject
 
 from so101_kinematics import JOINT_NAMES, forward_kinematics
+
+# ウィンドウを閉じる際などにグラフィックドライバ起因で出る
+# "Could not create shader object" 等のVTK内部エラー・警告ログを
+# コンソールに表示しないようにする(動作には影響しない)。
+vtkObject.GlobalWarningDisplayOff()
 
 # 表示範囲 [m] (アームの最大リーチに合わせて調整)
 PLOT_RANGE_XY = 0.45

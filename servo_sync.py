@@ -37,6 +37,12 @@ class ServoSync:
                 )
         return self.connected_ids
 
+    def set_torque_enable(self, scs_id, enable):
+        """サーボのトルクON/OFFを切り替える(OFFにすると手で動かせる)。"""
+        self.packet_handler.write1ByteTxRx(
+            self.port_handler, scs_id, config.ADDR_TORQUE_ENABLE, 1 if enable else 0
+        )
+
     def is_connected(self, joint_name):
         scs_id = config.JOINT_TO_SERVO_ID.get(joint_name)
         return scs_id in self.connected_ids
@@ -57,10 +63,20 @@ class ServoSync:
         return position
 
     def position_to_angle(self, joint_name, position):
-        """サーボ位置を論理角度[deg]に変換する。"""
+        """サーボ位置を論理角度[deg]に変換する。
+
+        サーボ位置は0〜4095(12bit)で一周するため、home_positionとの差分を
+        -2048〜+2048ステップの範囲に正規化してから角度に変換する
+        (0/4095の境界をまたぐ場合に角度が大きく飛ぶのを防ぐ)。
+        """
         calib = self.calibration[joint_name]
         steps_per_deg = config.STEPS_PER_REV / 360.0
-        return (position - calib["home_position"]) / calib["direction"] / steps_per_deg
+
+        diff = (position - calib["home_position"]) % config.STEPS_PER_REV
+        if diff > config.STEPS_PER_REV / 2:
+            diff -= config.STEPS_PER_REV
+
+        return diff / calib["direction"] / steps_per_deg
 
     def read_position(self, scs_id):
         pos, comm_result, error = self.packet_handler.read2ByteTxRx(

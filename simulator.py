@@ -25,6 +25,7 @@ from so101_kinematics import (
     clamp_angles,
 )
 from so101_view import ArmScene
+from home_position import load_home_pose
 
 # 入力された角度を反映する周期 [秒]
 REDRAW_INTERVAL = 0.05
@@ -32,7 +33,8 @@ REDRAW_INTERVAL = 0.05
 
 class Simulator:
     def __init__(self):
-        self.angles = [0.0] * len(JOINT_NAMES)
+        home_pose = load_home_pose()
+        self.angles = clamp_angles([home_pose[name] for name in JOINT_NAMES])
         self.lock = threading.Lock()
         self.dirty = True
         self.running = True

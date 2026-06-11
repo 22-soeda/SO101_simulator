@@ -19,10 +19,11 @@ import time
 import numpy as np
 import pyvista as pv
 
-from so101_kinematics import JOINT_LIMITS_DEG
+from so101_kinematics import JOINT_LIMITS_DEG, JOINT_NAMES
 from so101_ik import IK_JOINT_NAMES, end_effector_pose
 from so101_view import ArmScene, PLOT_RANGE_XY, PLOT_Z_MIN, PLOT_Z_MAX
 from arm_worker import ArmWorker
+from home_position import load_home_pose
 
 # スライダーの範囲
 X_RANGE = (-PLOT_RANGE_XY, PLOT_RANGE_XY)
@@ -43,12 +44,13 @@ SLIDER_TITLE_HEIGHT = 0.018
 
 class IKSimulator:
     def __init__(self, servo_sync=None):
-        # IK対象の4関節の初期値 (ゼロ姿勢)
-        q4_init = np.zeros(4)
-        self.wrist_roll_init = 0.0
-        self.gripper_init = 0.0
+        # IK対象の4関節とwrist_roll/gripperの初期値 (ホームポジション)
+        home_pose = load_home_pose()
+        q4_init = np.array([home_pose[name] for name in JOINT_NAMES[:4]])
+        self.wrist_roll_init = home_pose["wrist_roll"]
+        self.gripper_init = home_pose["gripper"]
 
-        # ゼロ姿勢の手先位置・ピッチ角をスライダーの初期値にする
+        # ホームポジションの手先位置・ピッチ角をスライダーの初期値にする
         x, y, z, pitch_rad = end_effector_pose(q4_init, self.wrist_roll_init, self.gripper_init)
         self.init_xyz_pitch = (x, y, z, np.degrees(pitch_rad))
 
