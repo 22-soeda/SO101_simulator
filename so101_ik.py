@@ -5,7 +5,16 @@ TCP(グリッパー先端)の目標位置(x, y, z)と、グリッパーが向く
 (水平面に対するピッチ角)に一致させるように反復計算で求める。
 
 wrist_roll(手首回転)とgripper(開閉)はIKの対象外で、別途直接指定する。
+
+cpp_ik/ にビルド済みのC++拡張(so101_ik_cpp)があれば、solve_ik()と
+end_effector_pose()はそちらを使う(同じアルゴリズムで約100倍高速かつ
+計算中にGILを解放するため、バックグラウンドスレッドでの計算がGUI
+スレッドをブロックしにくい)。拡張が無い場合は以下のPython実装に
+フォールバックする。
 """
+
+import os
+import sys
 
 import numpy as np
 
@@ -14,6 +23,15 @@ from so101_kinematics import (
     JOINT_LIMITS_DEG,
     forward_kinematics,
 )
+
+_CPP_IK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cpp_ik")
+if _CPP_IK_DIR not in sys.path:
+    sys.path.insert(0, _CPP_IK_DIR)
+
+try:
+    import so101_ik_cpp as _cpp
+except ImportError:
+    _cpp = None
 
 # IKで解く4関節 (shoulder_pan, shoulder_lift, elbow_flex, wrist_flex)
 IK_JOINT_NAMES = JOINT_NAMES[:4]
@@ -34,6 +52,12 @@ def end_effector_pose(q4_deg, wrist_roll_deg, gripper_deg):
     ピッチ角は、グリッパーの指が向く方向(wrist_roll回転軸方向)と
     水平面(XY平面)とのなす角 (上向きが正)。
     """
+    if _cpp is not None:
+        return np.array(_cpp.end_effector_pose(list(q4_deg), float(wrist_roll_deg), float(gripper_deg)))
+    return _end_effector_pose_python(q4_deg, wrist_roll_deg, gripper_deg)
+
+
+def _end_effector_pose_python(q4_deg, wrist_roll_deg, gripper_deg):
     angles = list(q4_deg) + [wrist_roll_deg, gripper_deg]
     _, end_effector_T, fingers = forward_kinematics(angles)
 
@@ -79,6 +103,20 @@ def solve_ik(target, q4_init_deg, wrist_roll_deg, gripper_deg,
     することがあるため、反復中で最も誤差が小さかった角度を記録して返す
     (収束しない場合(可動範囲外など)も、それまでで最も近づいた角度になる)。
     """
+    if _cpp is not None:
+        q = _cpp.solve_ik(
+            list(np.asarray(target, dtype=float)),
+            list(np.asarray(q4_init_deg, dtype=float)),
+            float(wrist_roll_deg), float(gripper_deg),
+            max_iters, tol_pos, tol_pitch,
+        )
+        return np.array(q)
+    return _solve_ik_python(target, q4_init_deg, wrist_roll_deg, gripper_deg,
+                             max_iters, tol_pos, tol_pitch)
+
+
+def _solve_ik_python(target, q4_init_deg, wrist_roll_deg, gripper_deg,
+                      max_iters=50, tol_pos=1e-4, tol_pitch=1e-3):
     target = np.array(target, dtype=float)
 
     q = _clamp(q4_init_deg)

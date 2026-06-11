@@ -131,3 +131,21 @@ python simulator_ik_sync.py
 - IKは `so101_ik.py` でヤコビアンの数値微分+疑似逆行列によるGauss-Newton法で
   解いています。特異姿勢付近では振動することがあるため、反復中で最も
   誤差が小さかった角度を採用しています。
+
+## C++版IK拡張 (任意・高速化)
+
+`so101_ik.py`のIK計算は、`cpp_ik/`にビルド済みのC++拡張
+(`so101_ik_cpp`)があれば自動的にそちらを使う(同じアルゴリズムで
+約100倍高速・計算中はGILを解放)。拡張が無くても純粋なPython実装に
+自動でフォールバックするため、ビルドは必須ではない。
+
+ビルドするには、Visual StudioのMSVC C++ビルドツールが必要:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+pip install pybind11 setuptools
+.\cpp_ik\build.ps1
+```
+
+成功すると `cpp_ik\so101_ik_cpp*.pyd` が生成される(gitignore対象、
+Pythonバージョン・環境ごとに再ビルドが必要)。

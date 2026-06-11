@@ -4,3 +4,8 @@ __pycache__/
 
 # 実機ごとのキャリブレーション値 (calibrate_servos.pyで生成)
 servo_calibration.json
+
+# C++版IK拡張のビルド成果物 (build_cpp_ik.ps1で生成、環境依存)
+cpp_ik/build/
+cpp_ik/*.pyd
+cpp_ik/*.so
