@@ -54,10 +54,14 @@ class Simulator:
         self.scene.update(angles)
 
     def run(self):
-        """ウィンドウを開き、閉じられるまで一定周期で再描画し続ける。"""
+        """ウィンドウを開き、閉じられる(右上の x ボタン)まで一定周期で再描画し続ける。"""
         self.draw()
         self.pl.show(auto_close=False, interactive_update=True)
-        while self.running and self.pl.iren is not None:
+        while (
+            self.running
+            and self.pl.iren is not None
+            and not self.pl.iren.interactor.GetDone()
+        ):
             with self.lock:
                 dirty = self.dirty
                 self.dirty = False
@@ -69,6 +73,7 @@ class Simulator:
                 break
             time.sleep(REDRAW_INTERVAL)
 
+        self.running = False
         if self.pl.iren is not None:
             self.pl.close()
 

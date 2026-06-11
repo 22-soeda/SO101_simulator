@@ -122,15 +122,17 @@ class IKSimulator:
         self.scene.update(angles, title=title)
 
     def run(self):
-        """ウィンドウを開き、閉じられるまで一定周期で再描画し続ける。"""
+        """ウィンドウを開き、閉じられる(右上の x ボタン)まで一定周期で再描画し続ける。"""
         self.pl.show(auto_close=False, interactive_update=True)
-        while self.pl.iren is not None:
+        while self.pl.iren is not None and not self.pl.iren.interactor.GetDone():
             self._redraw_from_state()
             try:
                 self.pl.update()
             except Exception:
                 break
             time.sleep(REDRAW_INTERVAL)
+        if self.pl.iren is not None:
+            self.pl.close()
 
 
 def main():
