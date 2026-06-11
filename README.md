@@ -13,15 +13,20 @@ PyVista(VTKベース)の3Dビューア上でSO-101アームの姿勢を確認で
 
 ## セットアップ
 
-仮想環境を作成して依存パッケージをインストールします。
+リポジトリをクローンし、仮想環境を作成して依存パッケージを
+インストールします。
 
 ```powershell
+git clone <このリポジトリのURL>
+cd SO101_simulator
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
-(既に `venv` フォルダが用意されている場合は `python -m venv venv` は不要です)
+C++版IK拡張(任意・高速化)をビルドする場合は、続けて
+[C++版IK拡張](#c版ik拡張-任意高速化)の手順も実行してください。
+拡張をビルドしなくても、純粋なPython実装で動作します。
 
 ## 実行 (関節角度入力版)
 
