@@ -19,11 +19,12 @@ import time
 import numpy as np
 import pyvista as pv
 
-from so101_kinematics import JOINT_LIMITS_DEG, JOINT_NAMES
+from so101_kinematics import JOINT_NAMES, clamp_angles
 from so101_ik import IK_JOINT_NAMES, end_effector_pose
 from so101_view import ArmScene, PLOT_RANGE_XY, PLOT_Z_MIN, PLOT_Z_MAX
 from arm_worker import ArmWorker
 from home_position import load_home_pose
+from calibration import calibrated_joint_limits_deg
 
 # スライダーの範囲
 X_RANGE = (-PLOT_RANGE_XY, PLOT_RANGE_XY)
@@ -44,17 +45,22 @@ SLIDER_TITLE_HEIGHT = 0.018
 
 class IKSimulator:
     def __init__(self, servo_sync=None):
+        # キャリブレーションのposition_min/maxから、有効な可動範囲[deg]を求める
+        self.limits = calibrated_joint_limits_deg()
+
         # IK対象の4関節とwrist_roll/gripperの初期値 (ホームポジション)
         home_pose = load_home_pose()
-        q4_init = np.array([home_pose[name] for name in JOINT_NAMES[:4]])
-        self.wrist_roll_init = home_pose["wrist_roll"]
-        self.gripper_init = home_pose["gripper"]
+        clamped = clamp_angles([home_pose[name] for name in JOINT_NAMES], self.limits)
+        q4_init = np.array(clamped[:4])
+        self.wrist_roll_init = clamped[4]
+        self.gripper_init = clamped[5]
 
         # ホームポジションの手先位置・ピッチ角をスライダーの初期値にする
         x, y, z, pitch_rad = end_effector_pose(q4_init, self.wrist_roll_init, self.gripper_init)
         self.init_xyz_pitch = (x, y, z, np.degrees(pitch_rad))
 
-        self.worker = ArmWorker(q4_init, self.wrist_roll_init, self.gripper_init, servo_sync=servo_sync)
+        self.worker = ArmWorker(q4_init, self.wrist_roll_init, self.gripper_init,
+                                 servo_sync=servo_sync, limits=self.limits)
 
         self.pl = pv.Plotter(title="SO-101 IK Simulator")
         self.scene = ArmScene(self.pl)
@@ -80,8 +86,8 @@ class IKSimulator:
 
     def _build_sliders(self):
         x, y, z, pitch_deg = self.init_xyz_pitch
-        wr_lo, wr_hi = JOINT_LIMITS_DEG["wrist_roll"]
-        gr_lo, gr_hi = JOINT_LIMITS_DEG["gripper"]
+        wr_lo, wr_hi = self.limits["wrist_roll"]
+        gr_lo, gr_hi = self.limits["gripper"]
 
         # add_slider_widgetは作成時にもコールバックを呼ぶため、最初の
         # スライダー作成時点で全キーの初期値を参照できるようにしておく。

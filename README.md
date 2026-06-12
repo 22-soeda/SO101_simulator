@@ -3,13 +3,16 @@
 PyVista(VTKベース)の3Dビューア上でSO-101アームの姿勢を確認できる
 シミュレーターです。左ドラッグで視点を回転(常にZ軸を上に保つ
 ターンテーブル操作)、スクロールでズームできます。
-3種類の操作方法があります。
+4種類の操作方法があります。
 
-- `simulator.py`          : ターミナルに各軸の角度[deg]を入力して動かす版
-- `simulator_ik.py`       : スライダーで手先位置・姿勢を指定し、逆運動学(IK)で
+- `simulator.py`            : ターミナルに各軸の角度[deg]を入力して動かす版
+- `simulator_ik.py`         : スライダーで手先位置・姿勢を指定し、逆運動学(IK)で
   動かす版
-- `simulator_ik_sync.py`  : `simulator_ik.py`に加えて、実機のFEETECHサーボへ
+- `simulator_ik_sync.py`    : `simulator_ik.py`に加えて、実機のFEETECHサーボへ
   関節角度をリアルタイムに送信する版
+- `simulator_controller.py` : `simulator_ik_sync.py`と同様に実機へ送信するが、
+  手先位置・姿勢を画面上のジョイスティック風スライダー(離すと中央に戻る)
+  で操作する版
 
 いずれも起動時の姿勢は `home_position.json` に保存された
 **ホームポジション**です(ファイルが無ければ全軸0度)。実機を使う場合の
@@ -103,6 +106,31 @@ python simulator_ik_sync.py
 関節のみ実機に角度が送信される(未接続の関節は無視されシミュレーターの
 表示のみ更新される)。
 
+## 実行 (コントローラー操作版)
+
+`simulator_ik_sync.py`と同じく、接続されているFEETECHサーボへ関節角度を
+リアルタイムに送信しますが、手先位置・姿勢の操作方法が異なります。
+
+```powershell
+.\venv\Scripts\Activate.ps1
+python simulator_controller.py
+```
+
+画面左に、`X`/`Y`/`Z`/`Pitch`/`wrist_roll`/`gripper`(上から順)それぞれに
+対応するスライダーが並んでいます。ゲームコントローラーのスティックのように
+操作します。
+
+- 中央(0)から左右にドラッグしている間、その方向に値が一定間隔で
+  変化し続けます。
+- ドラッグした指(マウス)を離すと、スライダーは自動的に中央へ戻り
+  停止します。
+- 中央付近(デッドゾーン)では変化しません。
+
+`X`/`Y`/`Z`/`Pitch`の変化量は、その時点の姿勢でのヤコビアン(微分IK)に
+より関節角度の変化量に変換されます。可動範囲外などでこれ以上目標方向に
+動けない場合、その変更は取り消され、シミュレーターのアームは動かさず、
+実機サーボへの指令も送信されません。
+
 ## キャリブレーションとホームポジション
 
 実機のFEETECHサーボを使う場合、2つの設定ファイルを用意します。
@@ -110,8 +138,8 @@ python simulator_ik_sync.py
 
 | ファイル | 内容 | 設定するスクリプト |
 | --- | --- | --- |
-| `servo_calibration.json` | 各関節の**初期姿勢**(論理角度0度)に対応するサーボの生位置・回転方向・可動範囲 | `calibrate_servos.py` / `calibrate_servos_visual.py` |
-| `home_position.json` | シミュレーター起動時の姿勢(**ホームポジション**)。初期姿勢(0度)から各関節を何度動かした姿勢かを論理角度[deg]で保存 | `calibrate_servos_visual.py`(終了時に自動保存) / `set_home_position.py` |
+| `servo_calibration.json` | 各関節の**初期姿勢**(論理角度0度)に対応するサーボの生位置・回転方向・可動範囲 | `calibrate_homing.py` |
+| `home_position.json` | シミュレーター起動時の姿勢(**ホームポジション**)。初期姿勢(0度)から各関節を何度動かした姿勢かを論理角度[deg]で保存 | `calibrate_homing.py`(終了時に自動保存) |
 
 ### 接続設定
 
@@ -120,14 +148,12 @@ python simulator_ik_sync.py
 
 ### 1. 初期姿勢のキャリブレーション
 
-#### 対話版 (推奨): calibrate_servos_visual.py
-
 3Dシミュレーターを見ながら、回転方向・初期姿勢(0度)・可動範囲を
 まとめて設定できます。
 
 ```powershell
 .\venv\Scripts\Activate.ps1
-python calibrate_servos_visual.py
+python calibrate_homing.py
 ```
 
 1. 起動すると接続中のサーボのトルクがOFFになり、アームを手で動かせる
@@ -148,48 +174,25 @@ python calibrate_servos_visual.py
    既存の値のまま変更されない)。橙のチェックボックスで範囲計測を
    リセットできる。
 5. ウィンドウを閉じると、その時点の姿勢が**ホームポジション**として
-   `home_position.json` に自動保存される(後述)。
-
-#### コマンドライン版: calibrate_servos.py
-
-3D表示なしの、数値入力のみの簡易版です。
-
-```powershell
-.\venv\Scripts\Activate.ps1
-python calibrate_servos.py
-```
-
-接続されているサーボごとに、回転方向(`1`または`-1`)と現在の論理角度
-(初期姿勢なら`0`)を入力します。`Enter`のみでデフォルト値を使用できます。
-`position_min`/`position_max`は`so101_kinematics.py`の可動範囲
-(`JOINT_LIMITS_DEG`)から自動計算されます。
+   `home_position.json` に自動保存される(次節)。
 
 `servo_calibration.json`に保存される値:
 
 - `home_position` : 論理角度0度に対応するサーボ位置
 - `direction`     : サーボ位置の増加方向と論理角度の+方向の関係 (`1`/`-1`)
 - `position_min` / `position_max` : サーボに送信してよい位置の範囲
-  (ソフトリミット)
+  (ソフトリミット)。各シミュレーターは、この範囲を論理角度に変換した
+  値と`so101_kinematics.py`の可動範囲(`JOINT_LIMITS_DEG`)との共通範囲を
+  関節の可動範囲として動作する。
 
 ### 2. ホームポジションの設定
 
 `home_position.json`には、各関節の論理角度[deg]として「初期姿勢(0度)から
-何度動かした姿勢か」を保存します。`simulator.py` / `simulator_ik.py` /
-`simulator_ik_sync.py`は、起動時にこの姿勢から始まります
-(ファイルが無ければ全軸0度)。
+何度動かした姿勢か」を保存します。各シミュレーターは、起動時にこの姿勢
+から始まります(ファイルが無ければ全軸0度)。
 
-`calibrate_servos_visual.py`のウィンドウを閉じると自動的に保存されます
-(上記の手順5)。3D表示なしで設定し直したい場合は、次のスクリプトを
-使います。
-
-```powershell
-.\venv\Scripts\Activate.ps1
-python set_home_position.py
-```
-
-接続中のサーボのトルクをOFFにし、各関節の論理角度を読み取り続けます。
-アームを手でホームポジションにしたい姿勢へ動かしてから`Ctrl+C`を押すと、
-その時点の姿勢が`home_position.json`に保存されます。
+`calibrate_homing.py`のウィンドウを閉じると自動的に保存されます
+(上記の手順5)。
 
 ## 補足
 

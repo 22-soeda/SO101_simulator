@@ -1,7 +1,5 @@
-"""3Dシミュレーター画面を見ながら対話的にサーボのキャリブレーションを行う。
-
-calibrate_servos.py(コマンドラインのみ)では回転方向の正負がわかりにくい
-ため、3Dシミュレーターを表示しながら以下のように設定できるようにした版。
+"""3Dシミュレーター画面を見ながら、サーボのキャリブレーション(初期姿勢・
+可動範囲)とホームポジションの設定を対話的に行う。
 
 手順:
   1. このスクリプトを実行する。接続されているサーボのトルクをOFFにし、
@@ -24,7 +22,7 @@ calibrate_servos.py(コマンドラインのみ)では回転方向の正負が�
   6. そのままアームを手で動かし、シミュレーターの起動姿勢にしたい
      ポーズにしてからウィンドウを閉じる。終了時点の各関節角度が
      ホームポジションとして home_position.json に保存され、
-     simulator.py / simulator_ik.py の起動姿勢になる。
+     各シミュレーターの起動姿勢になる。
   7. 各関節を可動範囲の両端まで手で動かすと、画面に表示される
      range=[min, max] が更新されていく。一通り動かし終えたら
      画面左側の「可動範囲を記録」(青)チェックボックスをクリック
@@ -35,7 +33,7 @@ calibrate_servos.py(コマンドラインのみ)では回転方向の正負が�
      計測値をリセットできる。
 
 使い方:
-    python calibrate_servos_visual.py
+    python calibrate_homing.py
 """
 
 import time
@@ -44,7 +42,7 @@ import pyvista as pv
 
 import servo_config as config
 from servo_sync import ServoSync
-from calibration import load_calibration, save_calibration, CALIBRATION_FILE
+from calibration import load_calibration, save_calibration, CALIBRATION_FILE, calibrated_joint_limits_deg
 from home_position import save_home_pose, HOME_POSITION_FILE
 from so101_kinematics import JOINT_NAMES, JOINT_LIMITS_DEG, clamp_angles
 from so101_view import ArmScene
@@ -280,7 +278,8 @@ class CalibrationGUI:
 
     def _save_home_pose(self):
         """終了時点の各関節角度をホームポジションとして保存する。"""
-        clamped = clamp_angles(self.last_angles)
+        limits = calibrated_joint_limits_deg(self.calib)
+        clamped = clamp_angles(self.last_angles, limits)
         home_pose = dict(zip(JOINT_NAMES, clamped))
         save_home_pose(home_pose)
         print(f"\n終了時の姿勢をホームポジションとして {HOME_POSITION_FILE} に保存しました。")

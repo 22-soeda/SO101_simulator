@@ -71,7 +71,7 @@ def _end_effector_pose_python(q4_deg, wrist_roll_deg, gripper_deg):
     return np.array([pos[0], pos[1], pos[2], pitch])
 
 
-def _numerical_jacobian(q4_deg, wrist_roll_deg, gripper_deg):
+def numerical_jacobian(q4_deg, wrist_roll_deg, gripper_deg):
     g0 = end_effector_pose(q4_deg, wrist_roll_deg, gripper_deg)
     J = np.zeros((4, 4))
     for i in range(4):
@@ -123,7 +123,7 @@ def _solve_ik_python(target, q4_init_deg, wrist_roll_deg, gripper_deg,
     best_q, best_err_norm = q.copy(), None
 
     for _ in range(max_iters):
-        J, g = _numerical_jacobian(q, wrist_roll_deg, gripper_deg)
+        J, g = numerical_jacobian(q, wrist_roll_deg, gripper_deg)
         err = target - g
         err_norm = _error_norm(err)
 

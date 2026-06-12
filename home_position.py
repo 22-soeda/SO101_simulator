@@ -1,10 +1,10 @@
 """ホームポジション(シミュレーター起動時の姿勢)の読み書き。
 
-home_pose_deg : 各関節の論理角度[deg] (calibrate_servos.pyで定義された
+home_pose_deg : 各関節の論理角度[deg] (calibrate_homing.pyで定義された
                 論理角度0度の姿勢から、何度動かした姿勢かを表す)
 
-設定値は home_position.json に保存され、simulator.py / simulator_ik.py の
-起動姿勢として使われる。set_home_position.py で対話的に設定する。
+設定値は home_position.json に保存され、各シミュレーターの起動姿勢として
+使われる。calibrate_homing.py で対話的に設定する。
 """
 
 import json

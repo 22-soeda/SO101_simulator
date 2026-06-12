@@ -3,7 +3,7 @@
 import json
 import os
 
-from so101_kinematics import JOINT_NAMES
+from so101_kinematics import JOINT_NAMES, JOINT_LIMITS_DEG
 import servo_config as config
 
 CALIBRATION_FILE = os.path.join(os.path.dirname(__file__), "servo_calibration.json")
@@ -37,3 +37,43 @@ def load_calibration():
 def save_calibration(calib):
     with open(CALIBRATION_FILE, "w", encoding="utf-8") as f:
         json.dump(calib, f, indent=2, ensure_ascii=False)
+
+
+def _position_to_angle_deg(position, home_position, direction):
+    """サーボ位置を論理角度[deg]に変換する(0/4095境界をまたぐ場合に対応)。"""
+    diff = (position - home_position) % config.STEPS_PER_REV
+    if diff > config.STEPS_PER_REV / 2:
+        diff -= config.STEPS_PER_REV
+    return diff / direction / (config.STEPS_PER_REV / 360.0)
+
+
+def calibrated_joint_limits_deg(calib=None):
+    """各関節の有効な角度範囲[deg]を返す。
+
+    servo_calibration.jsonのposition_min/position_max(サーボに送信してよい
+    範囲)を論理角度に変換し、so101_kinematics.JOINT_LIMITS_DEG(URDFの可動
+    範囲)との共通範囲を返す。シミュレーター・IKはこの範囲内で動作させる。
+    """
+    if calib is None:
+        calib = load_calibration()
+
+    limits = {}
+    for name in JOINT_NAMES:
+        entry = calib[name]
+        urdf_lo, urdf_hi = JOINT_LIMITS_DEG[name]
+
+        # position_min/maxが(ほぼ)全周分の場合は未設定とみなし、URDFの
+        # 可動範囲のみを使う(そのまま変換すると0/4095境界で反転した
+        # 範囲になってしまうため)。
+        position_range = entry["position_max"] - entry["position_min"]
+        if position_range >= config.STEPS_PER_REV - 1:
+            limits[name] = (urdf_lo, urdf_hi)
+            continue
+
+        a_min = _position_to_angle_deg(entry["position_min"], entry["home_position"], entry["direction"])
+        a_max = _position_to_angle_deg(entry["position_max"], entry["home_position"], entry["direction"])
+        lo, hi = min(a_min, a_max), max(a_min, a_max)
+
+        limits[name] = (max(lo, urdf_lo), min(hi, urdf_hi))
+
+    return limits

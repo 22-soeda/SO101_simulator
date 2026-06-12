@@ -16,10 +16,11 @@ import threading
 import numpy as np
 
 from so101_ik import end_effector_pose, solve_ik
+from so101_kinematics import clamp_angles
 
 
 class ArmWorker:
-    def __init__(self, q4_init, wrist_roll_init, gripper_init, servo_sync=None):
+    def __init__(self, q4_init, wrist_roll_init, gripper_init, servo_sync=None, limits=None):
         self._lock = threading.Lock()
         self._cond = threading.Condition(self._lock)
 
@@ -28,6 +29,7 @@ class ArmWorker:
         self._wrist_roll = wrist_roll_init
         self._gripper = gripper_init
         self._target_dirty = False
+        self._limits = limits
 
         # ワーカースレッドの出力 (最新の計算結果)
         self._q4 = np.array(q4_init, dtype=float)
@@ -73,6 +75,7 @@ class ArmWorker:
                 self._target_dirty = False
 
             q4 = solve_ik(target, q4_init, wrist_roll, gripper)
+            q4 = np.array(clamp_angles(q4, self._limits))
             tcp_pose = end_effector_pose(q4, wrist_roll, gripper)
 
             with self._lock:

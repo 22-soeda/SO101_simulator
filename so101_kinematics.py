@@ -120,11 +120,18 @@ def joint_transform(name, theta):
     return translate(*p["xyz"]) @ rpy_matrix(*p["rpy"]) @ rot_z(theta)
 
 
-def clamp_angles(angles_deg):
-    """各軸の角度を可動範囲内に収める。"""
+def clamp_angles(angles_deg, limits=None):
+    """各軸の角度を可動範囲内に収める。
+
+    limitsを指定しない場合はJOINT_LIMITS_DEG(URDFの可動範囲)を使う。
+    calibration.calibrated_joint_limits_deg()の戻り値を渡すと、
+    キャリブレーションで設定したposition_min/maxを反映した範囲に収める。
+    """
+    if limits is None:
+        limits = JOINT_LIMITS_DEG
     clamped = []
     for name, value in zip(JOINT_NAMES, angles_deg):
-        lo, hi = JOINT_LIMITS_DEG[name]
+        lo, hi = limits[name]
         clamped.append(min(max(value, lo), hi))
     return clamped
 

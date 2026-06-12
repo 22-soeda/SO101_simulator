@@ -20,8 +20,10 @@ POSITION_MAX = 4095
 STEPS_PER_REV = 4096
 
 # 角度指示時の既定の移動速度・加速度
-MOVING_SPEED = 1000
-MOVING_ACC = 50
+# 値の信頼性が低いため、STS3215の内存表上の最大値を指定する
+# (0x2E運行速度: 空載速度3400歩/秒、0x29加速度: 最大254)
+MOVING_SPEED = 3400
+MOVING_ACC = 254
 
 # 関節名 -> サーボID (SO-101の標準的な割り当て)
 JOINT_TO_SERVO_ID = {

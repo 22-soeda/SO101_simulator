@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 
 # 実機ごとのキャリブレーション値・ホームポジション
-# (calibrate_servos.py / calibrate_servos_visual.py / set_home_position.pyで生成)
+# (calibrate_homing.pyで生成)
 servo_calibration.json
 home_position.json
 

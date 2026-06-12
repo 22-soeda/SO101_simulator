@@ -21,11 +21,11 @@ import pyvista as pv
 
 from so101_kinematics import (
     JOINT_NAMES,
-    JOINT_LIMITS_DEG,
     clamp_angles,
 )
 from so101_view import ArmScene
 from home_position import load_home_pose
+from calibration import calibrated_joint_limits_deg
 
 # 入力された角度を反映する周期 [秒]
 REDRAW_INTERVAL = 0.05
@@ -33,8 +33,9 @@ REDRAW_INTERVAL = 0.05
 
 class Simulator:
     def __init__(self):
+        self.limits = calibrated_joint_limits_deg()
         home_pose = load_home_pose()
-        self.angles = clamp_angles([home_pose[name] for name in JOINT_NAMES])
+        self.angles = clamp_angles([home_pose[name] for name in JOINT_NAMES], self.limits)
         self.lock = threading.Lock()
         self.dirty = True
         self.running = True
@@ -43,7 +44,7 @@ class Simulator:
         self.scene = ArmScene(self.pl)
 
     def set_angles(self, angles_deg):
-        clamped = clamp_angles(angles_deg)
+        clamped = clamp_angles(angles_deg, self.limits)
         with self.lock:
             self.angles = clamped
             self.dirty = True
@@ -80,20 +81,20 @@ class Simulator:
             self.pl.close()
 
 
-def print_help():
+def print_help(limits):
     print("\n--- SO-101 シミュレーター 使い方 ---")
     print("6軸の角度[deg]をスペースまたはカンマ区切りで入力してください。")
     print("順番: " + " ".join(JOINT_NAMES))
-    print("可動範囲:")
+    print("可動範囲 (キャリブレーションのposition_min/maxを反映):")
     for name in JOINT_NAMES:
-        lo, hi = JOINT_LIMITS_DEG[name]
+        lo, hi = limits[name]
         print(f"  {name:14s}: {lo:.0f} ~ {hi:.0f}")
     print("例: 30 -20 40 0 90 45")
     print("コマンド: help / reset / quit\n")
 
 
 def input_loop(sim: Simulator):
-    print_help()
+    print_help(sim.limits)
     while sim.running:
         try:
             line = input(">> ").strip()
@@ -109,7 +110,7 @@ def input_loop(sim: Simulator):
             sim.running = False
             break
         if cmd == "help":
-            print_help()
+            print_help(sim.limits)
             continue
         if cmd == "reset":
             sim.set_angles([0.0] * len(JOINT_NAMES))
