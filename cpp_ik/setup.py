@@ -1,5 +1,9 @@
+import sys
+
 from pybind11.setup_helpers import Pybind11Extension, build_ext
 from setuptools import setup
+
+extra_compile_args = ["/utf-8"] if sys.platform == "win32" else []
 
 setup(
     name="so101_ik_cpp",
@@ -8,7 +12,7 @@ setup(
             "so101_ik_cpp",
             ["so101_ik_cpp.cpp"],
             cxx_std=17,
-            extra_compile_args=["/utf-8"],
+            extra_compile_args=extra_compile_args,
         ),
     ],
     cmdclass={"build_ext": build_ext},

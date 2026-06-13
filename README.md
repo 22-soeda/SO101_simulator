@@ -213,7 +213,9 @@ python calibrate_homing.py
 約100倍高速・計算中はGILを解放)。拡張が無くても純粋なPython実装に
 自動でフォールバックするため、ビルドは必須ではない。
 
-ビルドするには、Visual StudioのMSVC C++ビルドツールが必要:
+### Windows
+
+Visual StudioのMSVC C++ビルドツールが必要:
 
 ```powershell
 .\venv\Scripts\Activate.ps1
@@ -222,4 +224,19 @@ pip install pybind11 setuptools
 ```
 
 成功すると `cpp_ik\so101_ik_cpp*.pyd` が生成される(gitignore対象、
+Pythonバージョン・環境ごとに再ビルドが必要)。
+
+### Raspberry Pi (Linux)
+
+gcc/g++ (`build-essential`)が必要:
+
+```bash
+source venv/bin/activate
+pip install pybind11 setuptools
+cd cpp_ik
+python3 setup.py build_ext --inplace
+cd ..
+```
+
+成功すると `cpp_ik/so101_ik_cpp*.so` が生成される(gitignore対象、
 Pythonバージョン・環境ごとに再ビルドが必要)。
